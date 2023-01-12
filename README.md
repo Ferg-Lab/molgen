@@ -13,7 +13,7 @@ Getting Started
 
 Installation
 ------------
-To use `mdn_propagator`, you will need an environment with the following packages:
+To use `molgen`, you will need an environment with the following packages:
 
 * Python 3.7+
 * [PyTorch](https://pytorch.org/get-started/locally/)
@@ -24,7 +24,7 @@ For running and visualizing examples:
 * [MDTraj](https://www.mdtraj.org/1.9.8.dev0/installation.html)
 * [NGLView](https://github.com/nglviewer/nglview#installation)
 
-Once you have these packages installed, you can install molecool in the same environment using
+Once you have these packages installed, you can install `molgen` in the same environment using
 
 ```
 $ pip install -e .
@@ -32,7 +32,7 @@ $ pip install -e .
 
 Usage
 -------
-Once installed, you can use the package. This example generates a synthetic trajectory of Alanine Dipeptide (ADP) in the space of the backbone dihedral angles ($\phi , \psi$). More detailed examples can be found in the `examples` directory. 
+Once installed, you can use the package. This example trains a WGANGP to reproduce the alanine dipeptide backbone atoms conditioned on the backbone diedral angles ($\phi , \psi$). More detailed examples can be found in the `examples` directory.
 
 
 ```python
