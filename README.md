@@ -1,4 +1,4 @@
-MolGen
+Generative models for conditional molecular structure generation
 ==============================
 [//]: # (Badges)
 [![GitHub Actions Build Status](https://github.com/REPLACE_WITH_OWNER_ACCOUNT/molgen/workflows/CI/badge.svg)](https://github.com/REPLACE_WITH_OWNER_ACCOUNT/molgen/actions?query=workflow%3ACI)
