@@ -2,12 +2,16 @@ name: test
 channels:
 
   - conda-forge
-
+  - pytorch
   - defaults
 dependencies:
     # Base depends
   - python
   - pip
+
+    # package dependencies
+  - pytorch
+  - pytorch-lightning
 
     # Testing
   - pytest
