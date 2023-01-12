@@ -24,7 +24,7 @@ For running and visualizing examples:
 * [MDTraj](https://www.mdtraj.org/1.9.8.dev0/installation.html)
 * [NGLView](https://github.com/nglviewer/nglview#installation)
 
-Once you have these packages installed, you can install molecool in the same environment using
+Once you have these packages installed, you can install `mdn_propagator` in the same environment using
 
 ```
 $ pip install -e .
