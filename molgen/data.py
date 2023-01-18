@@ -11,18 +11,19 @@ from molgen.utils import MinMaxScaler
 class GANDataModule(LightningDataModule):
     """
     GANDataModule is a Pytorch Lightning DataModule for training GANs.
-    It takes in feature_data and condition_data and creates a DataLoader for training. 
-    The feature_data and condition_data should be of the same type (either a float tensor for single traj or list of float tensors for multiple trajs)
-    and must have the same number of data points.
+    It takes in feature_data and condition_data and creates a DataLoader for training.
+    The feature_data and condition_data should be of the same type (either a float tensor
+    for single traj or list of float tensors for multiple trajs) and must have the same
+    number of data points.
 
     Parameters
     ----------
     feature_data : Union[torch.Tensor, List[torch.Tensor]]
         feature data for the GAN, either a float tensor for single traj or list of float tensors for multiple trajs
-    
+
     condition_data : Union[torch.Tensor, List[torch.Tensor]]
         conditioning data for the GAN, either a float tensor for single traj or list of float tensors for multiple trajs
-    
+
     batch_size : int, default = 10000
         batch size for the DataLoader. Default is 1000.
 
@@ -40,6 +41,7 @@ class GANDataModule(LightningDataModule):
     self.c_dim: int
         dimention of the conditioning
     """
+
     def __init__(
         self,
         feature_data: Union[torch.Tensor, List[torch.Tensor]],
@@ -92,12 +94,12 @@ class GANDataModule(LightningDataModule):
     def _get_scaler(self, data):
         """
         Helper function to get the scaler for the data
-        
+
         Parameters
         ----------
             data : Union[torch.Tensor, List[torch.Tensor]]
                 data to be scaled
-            
+
         Returns
         ----------
             MinMaxScaler : Scaler for the data
@@ -120,10 +122,60 @@ class GANDataModule(LightningDataModule):
     def train_dataloader(self):
         """
         Returns the DataLoader for training the GAN
-        
+
         Returns
         ----------
             DataLoader : Pytorch DataLoader for training the GAN
         """
         dataset = TensorDataset(*self.train_data)
+        return DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
+
+
+class DDPMDataModule(GANDataModule):
+    """
+    DDPMDataModule is a Pytorch Lightning DataModule for training DDPMs.
+    It takes in feature_data and condition_data and creates a DataLoader for training.
+    The feature_data and condition_data should be of the same type (either a float tensor
+    for single traj or list of float tensors for multiple trajs) and must have the same
+    number of data points.
+
+    Parameters
+    ----------
+    feature_data : Union[torch.Tensor, List[torch.Tensor]]
+        feature data for the GAN, either a float tensor for single traj or list of float tensors for multiple trajs
+
+    condition_data : Union[torch.Tensor, List[torch.Tensor]]
+        conditioning data for the GAN, either a float tensor for single traj or list of float tensors for multiple trajs
+
+    batch_size : int, default = 10000
+        batch size for the DataLoader. Default is 1000.
+
+    Attributes
+    ----------
+    self.feature_scaler: MinMaxScaler
+        scaler for scaling the feature data
+
+    self.condition_scaler: MinMaxScaler
+        scaler for scaling the conditioning data
+
+    self.x_dim: int
+        dimention of the features
+
+    self.c_dim: int
+        dimention of the conditioning
+    """
+
+    def train_dataloader(self):
+        """
+        Returns the DataLoader for training the DDPM
+
+        Returns data as the conditions concatenated to the features
+
+        Returns
+        ----------
+            DataLoader : Pytorch DataLoader for training the GAN
+        """
+        dataset = TensorDataset(
+            torch.cat((self.train_data[1], self.train_data[0]), dim=-1).unsqueeze(1)
+        )
         return DataLoader(dataset, batch_size=self.batch_size, shuffle=True)

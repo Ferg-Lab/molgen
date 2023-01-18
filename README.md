@@ -1,7 +1,7 @@
 Generative models for conditional molecular structure generation
 ==============================
 [//]: # (Badges)
-[![GitHub Actions Build Status](https://github.com/REPLACE_WITH_OWNER_ACCOUNT/molgen/workflows/CI/badge.svg)](https://github.com/REPLACE_WITH_OWNER_ACCOUNT/molgen/actions?query=workflow%3ACI)
+[![GitHub Actions Build Status](https://github.com/Ferg-Lab/molgen/workflows/CI/badge.svg)](https://github.com/Ferg-Lab/molgen/actions?query=workflow%3ACI)
 <!--[![codecov](https://codecov.io/gh/REPLACE_WITH_OWNER_ACCOUNT/MolGen/branch/main/graph/badge.svg)](https://codecov.io/gh/REPLACE_WITH_OWNER_ACCOUNT/MolGen/branch/main)-->
 
 
@@ -18,6 +18,7 @@ To use `molgen`, you will need an environment with the following packages:
 * Python 3.7+
 * [PyTorch](https://pytorch.org/get-started/locally/)
 * [PyTorch Lightning](https://www.pytorchlightning.ai/)
+* [Einops](https://einops.rocks/#Installation)
 
 For running and visualizing examples:
 * [NumPy](https://numpy.org/install/)
@@ -78,6 +79,14 @@ model.save('ADP.ckpt')
 
 # Load from checkpoint
 model = WGANGP.load_from_checkpoint('ADP.ckpt')
+```
+
+Supports both generators based on both Generative Adversarial Networks (GANs) and Denoising Diffusion Probabilistic Models (DDPMs). The example above uses GANs, DDPMs support an equivalent API -- for example,
+
+```python
+from molgen.models import DDPM
+
+model = DDPM(....)
 ```
 
 ### Copyright

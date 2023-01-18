@@ -3,11 +3,10 @@
 import torch
 from pytorch_lightning import LightningModule, Trainer
 from typing import Union
-from molgen.modules import (
-    SimpleGenerator,
-    SimpleDiscriminator,
-)
-from molgen.data import GANDataModule
+from molgen.modules import SimpleGenerator, SimpleDiscriminator, GaussianDiffusion, Unet
+from molgen.data import GANDataModule, DDPMDataModule
+from molgen.utils import EMA, MinMaxScaler
+import copy
 
 
 class WGANGP(LightningModule):
@@ -51,6 +50,7 @@ class WGANGP(LightningModule):
     **kwargs: Additional keyword arguments.
 
     """
+
     def __init__(
         self,
         feature_dim: int,
@@ -76,6 +76,9 @@ class WGANGP(LightningModule):
             output_dim=self.hparams.feature_dim + self.hparams.condition_dim,
             hidden_dim=self.hparams.dis_hidden_dim,
         )
+
+        self._feature_scaler = MinMaxScaler(feature_dim)
+        self._condition_scaler = MinMaxScaler(condition_dim)
 
         self.is_fit = False
 
@@ -224,7 +227,8 @@ class WGANGP(LightningModule):
 
         if not hasattr(self, "trainer_"):
             self.trainer_ = Trainer(
-                auto_select_gpus=True,
+                devices=1,
+                accelerator="gpu" if torch.cuda.is_available() else "cpu",
                 max_epochs=max_epochs,
                 logger=False,
                 enable_checkpointing=False,
@@ -255,8 +259,8 @@ class WGANGP(LightningModule):
 
         assert self.is_fit, "model must be fit to data first using `fit`"
         assert (
-            c.size(1) == self.trainer_.datamodule.c_dim
-        ), f"inconsistent dimensions, expecting {self.trainer_.datamodule.c_dim} dim"
+            c.size(1) == self.hparams.condition_dim
+        ), f"inconsistent dimensions, expecting {self.hparams.condition_dim} dim"
 
         self.eval()
         z = torch.randn(c.size(0), self.hparams.latent_dim, device=self.device)
@@ -281,3 +285,246 @@ class WGANGP(LightningModule):
         assert self.is_fit, "model must be fit to data first using `fit`"
 
         self.trainer_.save_checkpoint(fname)
+
+    def on_load_checkpoint(self, checkpoint):
+        self.is_fit = True
+        return super().on_load_checkpoint(checkpoint)
+
+
+class DDPM(LightningModule):
+    """
+    A Denoising Diffusion Probabilistic Model (DDPM) implementation in Pytorch Lightning.
+
+    Credit: https://github.com/lucidrains/denoising-diffusion-pytorch
+
+    The DDPM class is a PyTorch implementation of the Diffusion Probabilistic Models (DDPM) algorithm for generative modeling.
+    It is built on top of the PyTorch Lightning framework and uses the Unet architecture for the generator and the
+    GaussianDiffusion class for the diffusion process. The DDPM class also includes an exponential moving average (EMA)
+    for stabilizing the training process.
+
+
+    Parameters
+    ----------
+    feature_dim : int
+        The dimension of the feature space of the data.
+
+    condition_dim : int
+        The dimension of the conditional input of the data.
+
+    hidden_dim : int, default = 32
+        Hidden dimention of the UNet model
+
+    dis_hidden_dim : int, default = 256
+        The dimension of the hidden layers in the discriminator network
+
+    loss_type : str, default = 'huber'
+        The type of loss function used in the diffusion process. Acceptable options are
+        'l1', 'l2' and 'huber'
+
+    beta_schedule :str, default = 'linear'
+        The schedule for the beta parameter in the diffusion process. Acceptable options are
+        'linear' and 'cosine'
+
+    timesteps : int, default = 1000
+        The number of timesteps in the diffusion process.
+
+    lr : float, default = 2e-5
+        The learning rate for the optimizer
+
+    ema_decay : float, default = 0.995
+        Decay rate of the EMA
+
+    step_start_ema : int, default = 2000
+        The number of steps after which the EMA will begin updating
+
+    update_ema_every : int, default = 10
+        The number of steps between updates to the EMA
+
+    **kwargs: Additional keyword arguments.
+
+    """
+
+    def __init__(
+        self,
+        feature_dim,
+        condition_dim,
+        hidden_dim=32,
+        loss_type="huber",
+        beta_schedule="linear",
+        timesteps=1000,
+        lr=2e-5,
+        ema_decay=0.995,
+        step_start_ema=2000,
+        update_ema_every=10,
+    ):
+        super().__init__()
+        self.save_hyperparameters()
+
+        model = Unet(dim=hidden_dim, dim_mults=(1, 2, 4, 8), groups=8)
+        diffusion = GaussianDiffusion(
+            model,
+            timesteps=timesteps,
+            unmask_number=condition_dim,
+            loss_type=loss_type,
+            beta_schedule=beta_schedule,
+        )
+
+        self.model = diffusion
+        self.ema = EMA(ema_decay)
+        self.ema_model = copy.deepcopy(self.model)
+
+        self._feature_scaler = MinMaxScaler(feature_dim)
+        self._condition_scaler = MinMaxScaler(condition_dim)
+
+        self.reset_parameters()
+
+        self.is_fit = False
+
+    def configure_optimizers(self):
+        opt = torch.optim.Adam(self.model.parameters(), lr=self.hparams.lr)
+        return opt
+
+    def reset_parameters(self):
+        self.ema_model.load_state_dict(self.model.state_dict())
+
+    def step_ema(self):
+        if self.global_step < self.hparams.step_start_ema:
+            self.reset_parameters()
+            return
+        self.ema.update_model_average(self.ema_model, self.model)
+
+    def training_step(self, batch, batch_idx):
+        loss = self.model(batch[0])
+        return loss
+
+    def optimizer_step(self, *args, **kwargs):
+        super().optimizer_step(*args, **kwargs)
+        if self.global_step % self.hparams.update_ema_every == 0:
+            self.step_ema()
+
+    def fit(
+        self,
+        feature_data: Union[torch.Tensor, list],
+        condition_data: Union[torch.Tensor, list],
+        batch_size: int = 1000,
+        max_epochs: int = 100,
+        **kwargs,
+    ):
+        """
+        Fit the DDPM on provided data
+
+        Parameters
+        ----------
+        feature_data : torch.Tensor (single traj) or list[torch.Tensor] (multi traj)
+            tensor with dimentions dim 0 = steps, dim 1 = features of features representing the real data that
+            is strived to be recapitulated by the generative model
+
+        condition_data : torch.Tensor (single traj) or list[torch.Tensor] (multi traj)
+            list of tensors with dimentions dim 0 = steps, dim 1 = features of features representing the conditioning
+            variables associated with each data point in feature space
+
+        batch_size : int, default = 1000
+            training batch size
+
+        max_epochs : int, default = 100
+            maximum number of epochs to train for
+
+        **kwargs:
+            additional keyword arguments to be passed to the the Lightning `Trainer`
+        """
+        datamodule = DDPMDataModule(
+            feature_data=feature_data,
+            condition_data=condition_data,
+            batch_size=batch_size,
+            **kwargs,
+        )
+        if self.is_fit:
+            raise Warning(
+                """The `fit` method was called more than once on the same `DDPM` instance,
+                recreating data scaler on dataset from the most recent `fit` invocation. This warning
+                can be safely ignored if the `DDPM` is being fit on the same data"""
+            )
+        self._feature_scaler = datamodule.feature_scaler
+        self._condition_scaler = datamodule.condition_scaler
+
+        if not hasattr(self, "trainer_"):
+            self.trainer_ = Trainer(
+                devices=1,
+                accelerator="gpu" if torch.cuda.is_available() else "cpu",
+                max_epochs=max_epochs,
+                logger=False,
+                enable_checkpointing=False,
+                **kwargs,
+            )
+            self.trainer_.fit(self, datamodule)
+        else:
+            self.trainer_.fit(self, datamodule)
+
+        self.is_fit = True
+        return self
+
+    def generate(self, c: torch.Tensor):
+        """
+        Generate samples based on conditioning variables
+
+        Parameters
+        ----------
+        c : torch.Tensor
+            Conditioning variables, float tensor of shape (n_samples, conditioning_dim)
+
+        Returns
+        -------
+        gen: torch.Tensor
+            Generated samples, float tensor of shape (n_samples, feature_dim)
+
+        """
+
+        assert self.is_fit, "model must be fit to data first using `fit`"
+        assert (
+            c.size(1) == self.hparams.condition_dim
+        ), f"inconsistent dimensions, expecting {self.hparams.condition_dim} dim"
+
+        self.eval()
+        c = self._condition_scaler.transform(c.to(self.device)).float().unsqueeze(1)
+        c = torch.cat(
+            (
+                c,
+                torch.zeros(
+                    c.shape[0],
+                    c.shape[1],
+                    self.hparams.feature_dim + self.hparams.condition_dim - c.shape[2],
+                    dtype=float,
+                    device=c.device,
+                ),
+            ),
+            -1,
+        ).float()
+
+        gen = self.ema_model.sample(
+            self.hparams.feature_dim + self.hparams.condition_dim,
+            batch_size=c.shape[0],
+            samples=c,
+        )
+        gen = gen[:, 0, self.hparams.condition_dim :]
+
+        gen = self._feature_scaler.inverse_transform(gen)
+
+        return gen
+
+    def save(self, fname: str):
+        """
+        Generates a synthetic trajectory from an initial starting point `x_0`
+
+        Parameters
+        ----------
+        fname : str
+            file name for saving a model checkpoint
+        """
+
+        assert self.is_fit, "model must be fit to data first using `fit`"
+
+        self.trainer_.save_checkpoint(fname)
+
+    def on_load_checkpoint(self, checkpoint):
+        self.is_fit = True
+        return super().on_load_checkpoint(checkpoint)

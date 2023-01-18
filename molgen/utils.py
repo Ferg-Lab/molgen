@@ -1,6 +1,9 @@
 """Some utility functions"""
 
 import torch
+import math
+from inspect import isfunction
+import numpy as np
 
 
 class MinMaxScaler(torch.nn.Module):
@@ -75,3 +78,110 @@ class MinMaxScaler(torch.nn.Module):
         """
         self._check_if_fit()
         return self.min + (X - self.feature_range[0]) / self.range
+
+
+class SinusoidalPosEmb(torch.nn.Module):
+    def __init__(self, dim):
+        super().__init__()
+        self.dim = dim
+
+    def forward(self, x):
+        device = x.device
+        half_dim = self.dim // 2
+        emb = math.log(10000) / (half_dim - 1)
+        emb = torch.exp(torch.arange(half_dim, device=device) * -emb)
+        emb = x[:, None] * emb[None, :]
+        emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
+        return emb
+
+
+class Mish(torch.nn.Module):
+    def forward(self, x):
+        return x * torch.tanh(torch.nn.functional.softplus(x))
+
+
+class Residual(torch.nn.Module):
+    def __init__(self, fn):
+        super().__init__()
+        self.fn = fn
+
+    def forward(self, x, *args, **kwargs):
+        return self.fn(x, *args, **kwargs) + x
+
+
+def exists(x):
+    return x is not None
+
+
+def default(val, d):
+    if exists(val):
+        return val
+    return d() if isfunction(d) else d
+
+
+def linear_schedule(timesteps, s=0.008):
+    """
+    linear schedule
+    """
+    betas = np.linspace(0.0001, 0.02, timesteps, dtype=np.float64)
+    return np.clip(betas, a_min=0, a_max=0.999)
+
+
+def cosine_beta_schedule(timesteps, s=0.008):
+    """
+    cosine schedule
+    as proposed in https://openreview.net/forum?id=-NEXDKk8gZ
+    """
+    steps = timesteps + 1
+    x = torch.linspace(0, timesteps, steps, dtype=torch.float64)
+    alphas_cumprod = torch.cos(((x / timesteps) + s) / (1 + s) * math.pi * 0.5) ** 2
+    alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
+    betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
+
+    betas = betas.numpy()
+    return np.clip(betas, a_min=0, a_max=0.999)
+
+
+def extract(a, t, x_shape):
+    b, *_ = t.shape
+    out = a.gather(-1, t)
+    return out.reshape(b, *((1,) * (len(x_shape) - 1)))
+
+
+def noise_like(shape, device, repeat=False):
+    repeat_noise = lambda: torch.randn((1, *shape[1:]), device=device).repeat(
+        shape[0], *((1,) * (len(shape) - 1))
+    )
+    noise = lambda: torch.randn(shape, device=device)
+    return repeat_noise() if repeat else noise()
+
+
+def generate_inprint_mask(n_batch, op_num, unmask_index=None):
+    """
+    The mask will be True where we keep the true value and false where we want to infer the value
+    So far it only supporting masking the right side of images
+    """
+
+    mask = torch.zeros((n_batch, 1, op_num), dtype=bool)
+    # if not unmask_index == None:
+    if unmask_index is not None:
+        mask[:, :, unmask_index] = True
+    return mask
+
+
+class EMA:
+    def __init__(self, beta):
+        super().__init__()
+        self.beta = beta
+
+    def update_model_average(self, ma_model, current_model):
+        for current_params, ma_params in zip(
+            current_model.parameters(), ma_model.parameters()
+        ):
+            old_weight, up_weight = ma_params.data, current_params.data
+            ma_params.data = self.update_average(old_weight, up_weight)
+
+    def update_average(self, old, new):
+        if old is None:
+            return new
+        return old * self.beta + (1 - self.beta) * new
