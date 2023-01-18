@@ -301,6 +301,8 @@ class Attention(nn.Module):
 
 
 class Unet1D(nn.Module):
+    """From: https://github.com/lucidrains/denoising-diffusion-pytorch"""
+
     def __init__(
         self,
         dim,
