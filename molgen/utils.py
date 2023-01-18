@@ -80,35 +80,6 @@ class MinMaxScaler(torch.nn.Module):
         return self.min + (X - self.feature_range[0]) / self.range
 
 
-class SinusoidalPosEmb(torch.nn.Module):
-    def __init__(self, dim):
-        super().__init__()
-        self.dim = dim
-
-    def forward(self, x):
-        device = x.device
-        half_dim = self.dim // 2
-        emb = math.log(10000) / (half_dim - 1)
-        emb = torch.exp(torch.arange(half_dim, device=device) * -emb)
-        emb = x[:, None] * emb[None, :]
-        emb = torch.cat((emb.sin(), emb.cos()), dim=-1)
-        return emb
-
-
-class Mish(torch.nn.Module):
-    def forward(self, x):
-        return x * torch.tanh(torch.nn.functional.softplus(x))
-
-
-class Residual(torch.nn.Module):
-    def __init__(self, fn):
-        super().__init__()
-        self.fn = fn
-
-    def forward(self, x, *args, **kwargs):
-        return self.fn(x, *args, **kwargs) + x
-
-
 def exists(x):
     return x is not None
 
