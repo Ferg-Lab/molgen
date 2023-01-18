@@ -3,7 +3,12 @@
 import torch
 from pytorch_lightning import LightningModule, Trainer
 from typing import Union
-from molgen.modules import SimpleGenerator, SimpleDiscriminator, GaussianDiffusion, Unet
+from molgen.modules import (
+    SimpleGenerator,
+    SimpleDiscriminator,
+    GaussianDiffusion,
+    Unet1D,
+)
 from molgen.data import GANDataModule, DDPMDataModule
 from molgen.utils import EMA, MinMaxScaler
 import copy
@@ -321,7 +326,7 @@ class DDPM(LightningModule):
         The type of loss function used in the diffusion process. Acceptable options are
         'l1', 'l2' and 'huber'
 
-    beta_schedule :str, default = 'linear'
+    beta_schedule :str, default = 'cosine'
         The schedule for the beta parameter in the diffusion process. Acceptable options are
         'linear' and 'cosine'
 
@@ -340,7 +345,7 @@ class DDPM(LightningModule):
     update_ema_every : int, default = 10
         The number of steps between updates to the EMA
 
-    **kwargs: Additional keyword arguments.
+    **kwargs: Additional keyword arguments passed to the Unet1D model.
 
     """
 
@@ -350,17 +355,18 @@ class DDPM(LightningModule):
         condition_dim,
         hidden_dim=32,
         loss_type="huber",
-        beta_schedule="linear",
+        beta_schedule="cosine",
         timesteps=1000,
         lr=2e-5,
         ema_decay=0.995,
         step_start_ema=2000,
         update_ema_every=10,
+        **kwargs,
     ):
         super().__init__()
         self.save_hyperparameters()
 
-        model = Unet(dim=hidden_dim, dim_mults=(1, 2, 4, 8), groups=8)
+        model = Unet1D(dim=hidden_dim, **kwargs)
         diffusion = GaussianDiffusion(
             model,
             timesteps=timesteps,
