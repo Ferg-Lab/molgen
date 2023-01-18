@@ -5,7 +5,7 @@ Generative models for conditional molecular structure generation
 <!--[![codecov](https://codecov.io/gh/REPLACE_WITH_OWNER_ACCOUNT/MolGen/branch/main/graph/badge.svg)](https://codecov.io/gh/REPLACE_WITH_OWNER_ACCOUNT/MolGen/branch/main)-->
 
 
-This package implements GANs for generative tasks such as conditional molecular structure generation.
+This package implements Generative Adversarial Networks (GANs) and Denoising Diffusion Probabilistic Models (DDPMs) for generative tasks such as conditional molecular structure generation.
 
 Getting Started
 ===============

@@ -13,7 +13,6 @@ dependencies:
   - pytorch
   - pytorch-lightning
   - einops
-  - tqdm
 
     # Testing
   - pytest
