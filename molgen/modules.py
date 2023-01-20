@@ -6,6 +6,7 @@ from molgen.utils import (
     exists,
     linear_schedule,
     cosine_beta_schedule,
+    sigmoid_beta_schedule,
     extract,
     generate_inprint_mask,
     noise_like,
@@ -468,9 +469,9 @@ class GaussianDiffusion(nn.Module):
         self,
         denoise_fn,
         timesteps=1000,
-        loss_type="huber",
+        loss_type="l1",
         betas=None,
-        beta_schedule="linear",
+        beta_schedule="sigmoid",
         unmask_number=0,
     ):
         super().__init__()
@@ -489,6 +490,12 @@ class GaussianDiffusion(nn.Module):
                 betas = linear_schedule(timesteps)
             elif beta_schedule == "cosine":
                 betas = cosine_beta_schedule(timesteps)
+            elif beta_schedule == "sigmoid":
+                betas = sigmoid_beta_schedule(timesteps)
+            else:
+                raise ValueError(
+                    "beta_schedule should be 'linear', 'cosine' or 'sigmoid'"
+                )
 
         alphas = 1.0 - betas
         alphas_cumprod = np.cumprod(alphas, axis=0)

@@ -322,13 +322,13 @@ class DDPM(LightningModule):
     dis_hidden_dim : int, default = 256
         The dimension of the hidden layers in the discriminator network
 
-    loss_type : str, default = 'huber'
+    loss_type : str, default = 'l1'
         The type of loss function used in the diffusion process. Acceptable options are
         'l1', 'l2' and 'huber'
 
     beta_schedule :str, default = 'cosine'
         The schedule for the beta parameter in the diffusion process. Acceptable options are
-        'linear' and 'cosine'
+        'linear', 'cosine' and 'sigmoid'
 
     timesteps : int, default = 1000
         The number of timesteps in the diffusion process.
@@ -354,7 +354,7 @@ class DDPM(LightningModule):
         feature_dim,
         condition_dim,
         hidden_dim=32,
-        loss_type="huber",
+        loss_type="l1",
         beta_schedule="cosine",
         timesteps=1000,
         lr=2e-5,
