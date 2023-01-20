@@ -267,6 +267,9 @@ class WGANGP(LightningModule):
             c.size(1) == self.hparams.condition_dim
         ), f"inconsistent dimensions, expecting {self.hparams.condition_dim} dim"
 
+        if torch.cuda.is_available():
+            self.to("cuda")
+
         self.eval()
         z = torch.randn(c.size(0), self.hparams.latent_dim, device=self.device)
 
@@ -275,7 +278,7 @@ class WGANGP(LightningModule):
             gen = self.forward(z, c)
             gen = self._feature_scaler.inverse_transform(gen)
 
-        return gen
+        return gen.cpu()
 
     def save(self, fname: str):
         """
@@ -490,6 +493,9 @@ class DDPM(LightningModule):
             c.size(1) == self.hparams.condition_dim
         ), f"inconsistent dimensions, expecting {self.hparams.condition_dim} dim"
 
+        if torch.cuda.is_available():
+            self.to("cuda")
+
         self.eval()
         c = self._condition_scaler.transform(c.to(self.device)).float().unsqueeze(1)
         c = torch.cat(
@@ -513,7 +519,7 @@ class DDPM(LightningModule):
         )
         gen = gen[:, 0, self.hparams.condition_dim :]
 
-        gen = self._feature_scaler.inverse_transform(gen)
+        gen = self._feature_scaler.inverse_transform(gen).cpu()
 
         return gen
 
