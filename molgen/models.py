@@ -2,6 +2,7 @@
 
 import torch
 from pytorch_lightning import LightningModule, Trainer
+from pytorch_lightning.loggers import CSVLogger
 from typing import Union
 from molgen.modules import (
     SimpleGenerator,
@@ -191,6 +192,7 @@ class WGANGP(LightningModule):
         condition_data: Union[torch.Tensor, list],
         batch_size: int = 1000,
         max_epochs: int = 100,
+        log: Union[str, bool] = False,
         **kwargs,
     ):
         """
@@ -212,9 +214,16 @@ class WGANGP(LightningModule):
         max_epochs : int, default = 100
             maximum number of epochs to train for
 
+        log : str or bool, default = False
+            if the results of the training should be logged. If True logs are by default saved in CSV format
+            to the directory `./molgen_logs/version_x/`, where `x` increments based on what has been
+            logged already. If a string is passed the saving directory is created based on the provided name
+            `./molgen_logs/{log}/`
+
         **kwargs:
             additional keyword arguments to be passed to the the Lightning `Trainer`
         """
+        kwargs.get("enable_checkpointing", False)
         datamodule = GANDataModule(
             feature_data=feature_data,
             condition_data=condition_data,
@@ -235,8 +244,13 @@ class WGANGP(LightningModule):
                 devices=1,
                 accelerator="gpu" if torch.cuda.is_available() else "cpu",
                 max_epochs=max_epochs,
-                logger=False,
-                enable_checkpointing=False,
+                logger=False
+                if log is False
+                else CSVLogger(
+                    save_dir="./",
+                    name="molgen_logs",
+                    version=None if not isinstance(log, str) else log,
+                ),
                 **kwargs,
             )
             self.trainer_.fit(self, datamodule)
@@ -404,6 +418,7 @@ class DDPM(LightningModule):
 
     def training_step(self, batch, batch_idx):
         loss = self.model(batch[0])
+        self.log("loss", loss)
         return loss
 
     def optimizer_step(self, *args, **kwargs):
@@ -417,6 +432,7 @@ class DDPM(LightningModule):
         condition_data: Union[torch.Tensor, list],
         batch_size: int = 1000,
         max_epochs: int = 100,
+        log: Union[str, bool] = False,
         **kwargs,
     ):
         """
@@ -438,9 +454,16 @@ class DDPM(LightningModule):
         max_epochs : int, default = 100
             maximum number of epochs to train for
 
+        log : str or bool, default = False
+            if the results of the training should be logged. If True logs are by default saved in CSV format
+            to the directory `./molgen_logs/version_x/`, where `x` increments based on what has been
+            logged already. If a string is passed the saving directory is created based on the provided name
+            `./molgen_logs/{log}/`
+
         **kwargs:
             additional keyword arguments to be passed to the the Lightning `Trainer`
         """
+        kwargs.get("enable_checkpointing", False)
         datamodule = DDPMDataModule(
             feature_data=feature_data,
             condition_data=condition_data,
@@ -461,8 +484,13 @@ class DDPM(LightningModule):
                 devices=1,
                 accelerator="gpu" if torch.cuda.is_available() else "cpu",
                 max_epochs=max_epochs,
-                logger=False,
-                enable_checkpointing=False,
+                logger=False
+                if log is False
+                else CSVLogger(
+                    save_dir="./",
+                    name="molgen_logs",
+                    version=None if not isinstance(log, str) else log,
+                ),
                 **kwargs,
             )
             self.trainer_.fit(self, datamodule)
