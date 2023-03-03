@@ -89,6 +89,8 @@ from molgen.models import DDPM
 model = DDPM(....)
 ```
 
+Code for the DDPM models are taken from: https://github.com/lucidrains/denoising-diffusion-pytorch (version 1.0.5)
+
 ### Copyright
 
 Copyright (c) 2023, Kirill Shmilovich
